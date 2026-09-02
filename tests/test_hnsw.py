@@ -1,6 +1,6 @@
 """Tests for HNSW index construction."""
 from collections import Counter, deque
-
+from baseline.bruteforce import BruteForceIndex
 import numpy as np
 import pytest
 
@@ -111,3 +111,59 @@ def test_insert_sift_subset():
     for v in vectors:
         index.insert(v)
     assert len(index.nodes) == 1000
+
+def _recall_at_k(retrieved_ids, ground_truth_ids, k):
+    gt = set(ground_truth_ids[:k])
+    retrieved = set(retrieved_ids[:k])
+    return len(gt & retrieved) / k
+    
+def test_search_empty_index():
+    index = HNSWIndex(dim=4)
+    assert index.search(np.array([1.0, 2.0, 3.0, 4.0]), k=5) == []
+
+def test_search_returns_top_k():
+    """Task 4.1: search returns top-k on a built index."""
+    rng = np.random.default_rng(1)
+    vectors = rng.standard_normal((200, 16)).astype(np.float32)
+    index = HNSWIndex(dim=16, M=8, ef_construction=50)
+    for vector in vectors:
+        index.insert(vector)
+    query = vectors[10]
+    results = index.search(query, k=10, ef_search=50)
+    assert len(results) == 10
+    assert results[0][0] == 10          # exact match
+    assert results[0][1] == pytest.approx(0.0)
+    assert results[0][1] <= results[-1][1]  # sorted closest first
+
+def test_search_on_large_index():
+    """Task 4.1: 5000-vector index, no errors."""
+    rng = np.random.default_rng(42)
+    vectors = rng.standard_normal((5000, 32)).astype(np.float32)
+    index = HNSWIndex(dim=32, M=16, ef_construction=100)
+    for vector in vectors:
+        index.insert(vector)
+    results = index.search(vectors[0], k=10, ef_search=50)
+    assert len(results) == 10
+    assert results[0][1] == pytest.approx(0.0)
+
+def test_search_recall_improves_with_ef_search():
+    """Task 4.2: higher ef_search → higher recall vs brute force."""
+    rng = np.random.default_rng(21)
+    vectors = rng.standard_normal((1000, 32)).astype(np.float32)
+    queries = rng.standard_normal((30, 32)).astype(np.float32)
+    index = HNSWIndex(dim=32, M=16, ef_construction=100)
+    brute = BruteForceIndex()
+    for vector in vectors:
+        index.insert(vector)
+        brute.insert(vector)
+    k = 10
+    recalls = {}
+    for ef_search in (10, 50, 100, 200):
+        total = 0.0
+        for query in queries:
+            retrieved = [nid for nid, _ in index.search(query, k=k, ef_search=ef_search)]
+            ground_truth = [nid for nid, _ in brute.search(query, k=k)]
+            total += _recall_at_k(retrieved, ground_truth, k)
+        recalls[ef_search] = total / len(queries)
+    assert recalls[10] <= recalls[50] <= recalls[100] <= recalls[200]
+    assert recalls[200] > recalls[10]

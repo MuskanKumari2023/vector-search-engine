@@ -196,7 +196,21 @@ class HNSWIndex:
         cost is paid once per node; search cost is paid on every query, so
         this is the knob you'll actually tune live in Phase 5.
         """
-        # TODO
+        if self.entry_point is None or k <= 0:
+            return []
+        query = np.asarray(query, dtype=float)
+        entry_points = [self.entry_point]
+        # 1. Descent: max_layer → layer 1, ef=1 (same as insert descent)
+        for lc in range(self.max_layer, 0, -1):
+            found = self._search_layer(query, entry_points, ef=1, layer=lc)
+            if not found:
+                break
+            entry_points = [found[0][0]]
+        # 2. Layer 0: wide search with ef_search
+        ef = max(ef_search, k)  # need at least k candidates
+        results = self._search_layer(query, entry_points, ef=ef, layer=0)
+        # 3. Return top k
+        return results[:k]
 
     def _dist(self, query: np.ndarray, node_id: int) -> float:
         return self.distance_fn(query, self.nodes[node_id].vector)
