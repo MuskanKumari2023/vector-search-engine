@@ -37,8 +37,7 @@ HNSW (Hierarchical Navigable Small World) approximate nearest-neighbor search im
 
 ```bash
 pip install -r requirements.txt
-python app.py     # ~60s: prints both tables, regenerates both charts
-pytest             # 33 tests
+python -m scripts.benchmark
 ```
 
 The SIFT10K corpus (~5 MB) downloads automatically on first run and caches under `data/cache/`. If the FTP source is blocked, download [siftsmall.tar.gz](ftp://ftp.irisa.fr/local/texmex/corpus/siftsmall.tar.gz) manually and extract `siftsmall_base.fvecs` and `siftsmall_query.fvecs` into `data/cache/small/`.
